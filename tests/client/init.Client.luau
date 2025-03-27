@@ -4,12 +4,26 @@
 -- clientStarter.luau
 -- This script is the entry point for the client. It is responsible for setting up the client environment and starting the client scripts.
 
-local RunService = game:GetService("RunService")
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
 
-RunService.Heartbeat:Connect(function()
-    print("Hello, world!")
-end)
+local scheduler = require(game.ReplicatedStorage.SharedScripts.scheduler)
 
-RunService.RenderStepped:Connect(function()
-    warn("Hello world!")
-end)
+local function printHello()
+    warn("Hello from the client!")
+end
+
+local t = {}
+
+for i = 1, 10000 do
+    -- task.spawn(function()
+    --     task.wait(math.random(1, 5))
+    --     local r = math.random(1, 5)
+    --     while true do
+    --         printHello()
+    --         task.wait(r)
+    --     end
+    -- end)
+    t[i] = scheduler(printHello).after(5)
+end

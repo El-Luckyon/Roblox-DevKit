@@ -25,19 +25,19 @@ return function<T>() : Queue<T>
     local front : number = 0
     local back : number = 0
 
-    -- adds item to end of queue
+    -- Adds item to end of queue
     local function pushBack(val : T)
         back += 1
         items[back] = val
     end
 
-    -- adds item to front of queue
+    -- Adds item to front of queue
     local function pushFront(val : T)
         front -= 1
         items[front] = val
     end
 
-    -- removes and returns the last item
+    -- Removes and returns the last item
     local function popBack() : T
         local item = items[back]
         items[back] = nil
@@ -45,7 +45,7 @@ return function<T>() : Queue<T>
         return item
     end
 
-    -- removes and returns the first item
+    -- Removes and returns the first item
     local function popFront() : T
         local item = items[front]
         items[front] = nil
@@ -53,29 +53,29 @@ return function<T>() : Queue<T>
         return item
     end
 
-    -- checks if the queue is empty
+    -- Checks if the queue is empty
     local function isEmpty() : boolean
         return front > back
     end
 
-    -- returns the number of items in the queue
+    -- Returns the number of items in the queue
     local function size() : number
         return back - front + 1
     end
 
-    -- clears the queue
+    -- Clears the queue
     local function clear() : ()
         table.clear(items)
         front = 0
         back = 0
     end
 
-    -- returns the first item
+    -- Returns the first item
     local function getFront() : T
         return items[front]
     end
 
-    -- returns the last item
+    -- Returns the last item
     local function getBack() : T
         return items[back]
     end
