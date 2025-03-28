@@ -8,11 +8,11 @@
 export type encodeFunc<T> = (val: T, size : number?) -> ()
 export type decodeFunc<T> = (buf: buffer, startIndex: number) -> T
 
-export type namespace<T> = {
-	new: (id: string, val: T, encode: encodeFunc<T>, decode: decodeFunc<T>, size: number?) -> T,
+export type namespace = {
+	new: <T>(id: string, val: T, encode: encodeFunc<T>, decode: decodeFunc<T>, size: number?) -> T,
 	getFromId: (id: string) -> bufferType<any>,
-	getFromSample: (val: T) -> bufferType<T>,
-	getIdFromSample: (val: T) -> string,
+	getFromSample: <T>(val: T) -> bufferType<T>,
+	getIdFromSample: <T>(val: T) -> string,
 }
 
 export type bufferType<T> = {
@@ -24,7 +24,7 @@ export type bufferType<T> = {
 }
 
 -- Namespace Constructor
-return function<T>(name : string) : namespace<T>
+return function<T>(name : string) : namespace
 
     local bufferTypesFromHash: { [string]: bufferType<any> } = {}
     local bufferTypesFromId: { [string]: bufferType<any> } = {}
@@ -86,7 +86,7 @@ return function<T>(name : string) : namespace<T>
 	end
 
 	-- Returns the id from the sample by hashing the sample
-	local function getIdFromSample(val: any): string
+	local function getIdFromSample<T>(val: T): string
 		local hash = hashFunction(val)
 		return idFromHash[hash]
 	end
