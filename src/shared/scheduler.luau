@@ -22,7 +22,7 @@ export type job = {
 
 local RunService = game:GetService("RunService")
 
-local MAX_PROCESSING_TIME = 0.025
+local MAX_PROCESSING_TIME = 0.05
 
 local heaps = require(script.Parent.heap)
 

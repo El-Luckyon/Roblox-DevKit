@@ -9,21 +9,7 @@ if not game:IsLoaded() then
 end
 
 local scheduler = require(game.ReplicatedStorage.SharedScripts.scheduler)
+local bufferTypes = require(game.ReplicatedStorage.SharedScripts.bufferTypes)
+local bufferWriter = require(game.ReplicatedStorage.SharedScripts.bufferWriter)
 
-local function printHello()
-    warn("Hello from the client!")
-end
 
-local t = {}
-
-for i = 1, 10000 do
-    -- task.spawn(function()
-    --     task.wait(math.random(1, 5))
-    --     local r = math.random(1, 5)
-    --     while true do
-    --         printHello()
-    --         task.wait(r)
-    --     end
-    -- end)
-    t[i] = scheduler(printHello).after(5)
-end
