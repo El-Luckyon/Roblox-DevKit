@@ -6,7 +6,7 @@
 -- will handle creation of buffer types and namespaces. (data types that can be encoded into a buffer)
 
 export type encodeFunc<T> = (val: T, size : number?) -> ()
-export type decodeFunc<T> = (buf: buffer, startIndex: number) -> T
+export type decodeFunc<T> = (buf: buffer, startIndex: number, size : number) -> (T, number?)
 
 export type namespace = {
 	new: <T>(id: string, val: T, encode: encodeFunc<T>, decode: decodeFunc<T>, size: number?) -> T,
@@ -39,7 +39,7 @@ return function<T>(name : string) : namespace
 			return tostring(val) -- buffers and table will have the same memory address, so we can use tostring to get the address
 		elseif t == "boolean" then
 			return val and "true" or "false"
-		elseif t == "vector3" then
+		elseif t == "Vector3" then
 			return string.format("v/%f%f%f", val.X, val.Y, val.Z)
 		elseif t == "Color3" then
 			return string.format("c/%f%f%f", val.R, val.G, val.B)

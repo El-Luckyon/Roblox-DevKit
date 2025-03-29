@@ -67,7 +67,7 @@ local function createBufferWriter(DEFAULT_SIZE : number) : writer
         local sizeToWrite = stringSize + stringHeaderWriterSize
         alloc(sizeToWrite)
         stringHeaderWriter(buf, cursor, stringSize)
-        defaultWriteString(buf, cursor + stringHeaderWriterSize, val, sizeToWrite)
+        defaultWriteString(buf, cursor + stringHeaderWriterSize, val, stringSize)
         cursor += sizeToWrite
     end
 
