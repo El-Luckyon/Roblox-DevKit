@@ -5,6 +5,25 @@
 -- bufferWriter.luau
 -- functions to write to buffer
 
+export type writer = {
+    writeString: (val: string) -> (),
+    writeU8: (val: number) -> (),
+    writeU16: (val: number) -> (),
+    writeU32: (val: number) -> (),
+    writeI8: (val: number) -> (),
+    writeI16: (val: number) -> (),
+    writeI32: (val: number) -> (),
+    writeF32: (val: number) -> (),
+    writeF64: (val: number) -> (),
+    writeBuf: (val: buffer) -> (),
+    writeBool: (val: boolean) -> (),
+    writeFixedString: (val: string) -> (),
+    writeFixedBuffer: (val: buffer) -> (),
+    pop: () -> buffer,
+    reset: () -> (),
+    move: (val : number) -> ()
+}
+
 local defaultWriteString = buffer.writestring
 local defaultWriteU8 = buffer.writeu8
 local defaultWriteU16 = buffer.writeu16
@@ -14,8 +33,8 @@ local defaultWriteI8 = buffer.writei8
 local defaultWriteI16 = buffer.writei16
 local defaultWriteI32 = buffer.writei32
 
-local defaultWriteFloat32 = buffer.writef32 
-local defaultWriteFloat16 = buffer.writef64
+local defaultWriteF32 = buffer.writef32 
+local defaultWriteF64 = buffer.writef64
 
 local copy = buffer.copy
 local create = buffer.create
@@ -25,7 +44,7 @@ local stringHeaderWriter = defaultWriteU16
 local stringHeaderWriterSize = 2
 
 -- Writer Constructor
-local function createBufferWriter(DEFAULT_SIZE : number)
+local function createBufferWriter(DEFAULT_SIZE : number) : writer
     local buf = buffer.create(DEFAULT_SIZE)
     local cursor = 0
     local size = DEFAULT_SIZE
@@ -45,7 +64,7 @@ local function createBufferWriter(DEFAULT_SIZE : number)
 
     local function writeString(val : string) : ()
         local stringSize = #val
-        local sizeToWrite = stringSize + 1
+        local sizeToWrite = stringSize + stringHeaderWriterSize
         alloc(sizeToWrite)
         stringHeaderWriter(buf, cursor, stringSize)
         defaultWriteString(buf, cursor + stringHeaderWriterSize, val, sizeToWrite)
@@ -90,21 +109,43 @@ local function createBufferWriter(DEFAULT_SIZE : number)
 
     local function writeF32(val : number) : ()
         alloc(4)
-        defaultWriteFloat32(buf, cursor, val)
+        defaultWriteF32(buf, cursor, val)
         cursor += 4
     end
 
     local function writeF64(val : number) : ()
         alloc(8)
-        defaultWriteFloat16(buf, cursor, val)
+        defaultWriteF64(buf, cursor, val)
         cursor += 8
     end
 
     local function writeBuffer(val : buffer) : ()
-        local sizeToWrite = len(val)
+        local bufferSize = len(val)
+        local sizeToWrite = bufferSize + stringHeaderWriterSize
         alloc(sizeToWrite)
-        copy(buf, cursor, val, 0, sizeToWrite)
+        stringHeaderWriter(buf, cursor, bufferSize)
+        copy(buf, cursor, val, 0, bufferSize)
         cursor += sizeToWrite
+    end
+
+    local function writeFixedBuffer(val : buffer) : ()
+        local bufferSize = len(val)
+        alloc(bufferSize)
+        copy(buf, cursor, val, 0, bufferSize)
+        cursor += bufferSize
+    end
+
+    local function writeFixedString(val : string) : ()
+        local stringSize = #val
+        alloc(stringSize)
+        defaultWriteString(buf, cursor, val, stringSize)
+        cursor += stringSize
+    end
+
+    local function writeBoolean(val : boolean) : ()
+        alloc(1)
+        defaultWriteU8(buf, cursor, val and 1 or 0)
+        cursor += 1
     end
 
     -- Returns a buffer with the data written so far
@@ -122,6 +163,11 @@ local function createBufferWriter(DEFAULT_SIZE : number)
         buf = buffer.create(size)
     end
 
+    -- Moves the cursor to designated position
+    local function moveCursor(val : number) : ()
+        cursor = val
+    end
+
     return table.freeze{
         writeString = writeString,
         writeU8 = writeU8,
@@ -133,8 +179,12 @@ local function createBufferWriter(DEFAULT_SIZE : number)
         writeF32 = writeF32,
         writeF64 = writeF64,
         writeBuf = writeBuffer,
+        writeBool = writeBoolean,
+        writeFixedString = writeFixedString,
+        writeFixedBuffer = writeFixedBuffer,
         pop = pop,
         reset = reset,
+        move = moveCursor,
     }
 end
 
