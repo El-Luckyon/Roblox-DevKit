@@ -8,41 +8,108 @@ if not game:IsLoaded() then
     game.Loaded:Wait()
 end
 
-local httpService = game:GetService("HttpService")
-local typespaces = require(game.ReplicatedStorage.SharedScripts.typespace)
+local networking = require(game.ReplicatedStorage.SharedScripts.networking)
+local types = networking.types
 
-local test = typespaces.new("TEST", 256)
-local namespace = test.namespace()
-local writer = test.writer
-
-local structSample= test.struct{
-    key1 = test.bool, 
-    key2 = test.vec3,
-    key3 = test.struct{
-        key1 = test.bool, 
-        key2 = test.vec3,
-        key3 = test.f32color3
-    }
+local packet = networking.packet{
+    arr1 = types.array(types.bool),
+    arr2 = types.array(types.bool),
+    arr3 = types.array(types.bool),
+    arr4 = types.array(types.string),
+    arr5 = types.array(types.string),
+    arr6 = types.array(types.string),
+    arr7 = types.array(types.string),
 }
 
-local structType = namespace.getFromSample(structSample)
-
-local val = {
-    key1 = true,
-    key2 = Vector3.new(204, 302, 340),
-    key3 = {
-        key1 = true,
-        key2 = Vector3.new(3900, 300, 222),
-        key3 = Color3.new(0.368627, 0.090196, 0.392157),
-    }
+local data = {
+    arr1 = {
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+        true, false, true, false,
+    },
+    arr2 = {true, false, true, false},
+    arr3 = {true, false, true, false},
+    arr4 = {"x'x''x", "bruh", "skibibkb", "coolaid"},
+    arr5 = {"x'x''x", "bruh", "skibibkb", "coolaid"},
+    arr6 = {"x'x''x", "bruh", "skibibkb", "coolaid"},
+    arr7 = {
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+        "x'x''x", "bruh", "skibibkb", "coolaid",
+    },
 }
 
-structType.encode(val)
+local remote = game.ReplicatedStorage.RemoteEvent
 
-local buf = writer.pop()
+while true do
+    task.wait()
+    for i = 1, 200 do
+        packet:fire(data)
+    end
+end
 
-print(#buffer.tostring(buf))
-print(#httpService:JSONEncode(val))
-
-local result = structType.decode(buf, 0, 0)
-workspace:WaitForChild("Part").Color = result.key3.key3

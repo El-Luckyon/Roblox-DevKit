@@ -5,6 +5,10 @@
 -- heap.luau
 -- Min-heap implmentation in luau
 
+------------Dependencies-------------
+--                                 --
+-------------------------------------
+
 export type Compare<T> = (a : T, b : T) -> boolean
 
 export type Heap<T> = {

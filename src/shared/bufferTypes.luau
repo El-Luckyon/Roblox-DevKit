@@ -5,6 +5,10 @@
 -- bufferTypes.luau
 -- will handle creation of buffer types and namespaces. (data types that can be encoded into a buffer)
 
+------------Dependencies-------------
+--                                 --
+-------------------------------------
+
 export type encodeFunc<T> = (val: T, size : number?) -> ()
 export type decodeFunc<T> = (buf: buffer, startIndex: number, size : number) -> (T, number?)
 

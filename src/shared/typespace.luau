@@ -2,6 +2,14 @@
 --!native
 --!optimize 2
 
+-- typespace.luau
+-- an extension to namespace from buffertypes. allows creation of same types with different writers.
+
+------------Dependencies-------------
+-- bufferTypes.luau                --
+-- bufferWriter.luau               --
+-------------------------------------
+
 local bufferWriter = require(script.Parent.bufferWriter)
 local bufferTypes  = require(script.Parent.bufferTypes)
 

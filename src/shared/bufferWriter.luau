@@ -5,6 +5,10 @@
 -- bufferWriter.luau
 -- functions to write to buffer
 
+------------Dependencies-------------
+--                                 --
+-------------------------------------
+
 export type writer = {
     writeString: (val: string) -> (),
     writeU8: (val: number) -> (),
@@ -21,7 +25,9 @@ export type writer = {
     writeFixedBuffer: (val: buffer) -> (),
     pop: () -> buffer,
     reset: () -> (),
-    move: (val : number) -> ()
+    move: (val : number) -> (),
+    cursor : () -> number,
+    writeu16At : (val : number, cursor : number) -> (),
 }
 
 local defaultWriteString = buffer.writestring
@@ -168,6 +174,15 @@ local function createBufferWriter(DEFAULT_SIZE : number) : writer
         cursor = val
     end
 
+    local function writeu16At(val : number, newCursor : number) : ()
+        alloc(2)
+        defaultWriteU16(buf, newCursor, val)
+    end
+
+    local function getCursor() : number
+        return cursor
+    end
+
     return table.freeze{
         writeString = writeString,
         writeU8 = writeU8,
@@ -185,6 +200,8 @@ local function createBufferWriter(DEFAULT_SIZE : number) : writer
         pop = pop,
         reset = reset,
         move = moveCursor,
+        cursor = getCursor,
+        writeu16At = writeu16At,
     }
 end
 

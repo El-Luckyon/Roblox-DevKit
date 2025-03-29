@@ -5,6 +5,10 @@
 -- scheduler.luau
 -- This module provides a scheduler for running functions at a later time or at regular interval
 
+------------Dependencies-------------
+-- heap.luau                       --
+-------------------------------------
+
 export type callback = (...any) -> ...any
 
 export type jobInterface = {

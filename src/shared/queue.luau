@@ -27,14 +27,14 @@ return function<T>() : Queue<T>
 
     -- Adds item to end of queue
     local function pushBack(val : T)
-        back += 1
         items[back] = val
+        back += 1
     end
 
     -- Adds item to front of queue
     local function pushFront(val : T)
-        front -= 1
         items[front] = val
+        front -= 1
     end
 
     -- Removes and returns the last item
@@ -55,12 +55,12 @@ return function<T>() : Queue<T>
 
     -- Checks if the queue is empty
     local function isEmpty() : boolean
-        return front > back
+        return front >= back
     end
 
     -- Returns the number of items in the queue
     local function size() : number
-        return back - front + 1
+        return math.abs(back - front)
     end
 
     -- Clears the queue
