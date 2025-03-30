@@ -3,20 +3,15 @@
 --!optimize 2
 
 -- queue.luau
--- a queue & stack data structure implementation.
-
--- even tho its called a queue it has pop and push in both ends so can be used as a stack.
+-- a queue structure implementation.
 
 export type Queue<T> = {
-    pushBack : (val : T) -> (),
-    pushFront : (val : T) -> (),
-    popBack : () -> T,
-    popFront : () -> T,
+    push : (val : T) -> (),
+    pop : () -> T,
     isEmpty : () -> boolean,
     size : () -> number,
     clear : () -> (),
-    getFront : () -> T,
-    getBack : () -> T,
+    peek : () -> T
 }
 
 -- Queue constructor
@@ -26,27 +21,13 @@ return function<T>() : Queue<T>
     local back : number = 0
 
     -- Adds item to end of queue
-    local function pushBack(val : T)
+    local function push(val : T)
         items[back] = val
         back += 1
     end
 
-    -- Adds item to front of queue
-    local function pushFront(val : T)
-        items[front] = val
-        front -= 1
-    end
-
-    -- Removes and returns the last item
-    local function popBack() : T
-        local item = items[back]
-        items[back] = nil
-        back -= 1
-        return item
-    end
-
     -- Removes and returns the first item
-    local function popFront() : T
+    local function pop() : T
         local item = items[front]
         items[front] = nil
         front += 1
@@ -71,24 +52,16 @@ return function<T>() : Queue<T>
     end
 
     -- Returns the first item
-    local function getFront() : T
+    local function peek() : T
         return items[front]
     end
 
-    -- Returns the last item
-    local function getBack() : T
-        return items[back]
-    end
-
     return table.freeze{
-        pushBack = pushBack,
-        pushFront = pushFront,
-        popBack = popBack,
-        popFront = popFront,
+        push = push,
+        pop = pop,
         isEmpty = isEmpty,
         size = size,
         clear = clear,
-        getFront = getFront,
-        getBack = getBack,
+        peek = peek,
     }
 end

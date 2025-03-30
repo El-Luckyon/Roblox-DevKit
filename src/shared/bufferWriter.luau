@@ -27,7 +27,6 @@ export type writer = {
     reset: () -> (),
     move: (val : number) -> (),
     cursor : () -> number,
-    writeu16At : (val : number, cursor : number) -> (),
 }
 
 local defaultWriteString = buffer.writestring
@@ -174,11 +173,6 @@ local function createBufferWriter(DEFAULT_SIZE : number) : writer
         cursor = val
     end
 
-    local function writeu16At(val : number, newCursor : number) : ()
-        alloc(2)
-        defaultWriteU16(buf, newCursor, val)
-    end
-
     local function getCursor() : number
         return cursor
     end
@@ -201,8 +195,8 @@ local function createBufferWriter(DEFAULT_SIZE : number) : writer
         reset = reset,
         move = moveCursor,
         cursor = getCursor,
-        writeu16At = writeu16At,
     }
+
 end
 
 return createBufferWriter

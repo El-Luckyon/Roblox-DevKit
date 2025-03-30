@@ -14,6 +14,7 @@
 
 --------------Configs----------------
 local CHANNEL_REMOTE_NAME = "__networking_remote"
+local CLIENT_AWAIT_CHANNEL_TIMEOUT = 10
 
 -------------------------------------
 
@@ -21,241 +22,344 @@ local RunService = game:GetService("RunService")
 local PlayerService = game:GetService("Players")
 
 local parentDir = script.Parent
-local newQueue = require(parentDir.queue)
-local newJob = require(parentDir.scheduler)
 local typespace = require(parentDir.typespace)
 local bufferTypes = require(parentDir.bufferTypes)
 
-export type ClientCallback<T...> = (T...) -> ()
-export type ServerCallback<T...> = (Player, T...) -> ()
-
-export type PacketData<T> = {
-	args: T,
-	id: number,
-}
+export type ClientCallback<T> = (T) -> ()
+export type ServerCallback<T> = (Player, T) -> ()
 
 export type Packet<T> = {
-	serverConnect: (packet: Packet<T>, callback: ServerCallback<T>) -> (),
-	clientConnect: (packet: Packet<T>, callback: ClientCallback<T>) -> (),
-	fire: (packet: Packet<T>, data: T) -> (),
-	fireClient: (packet: Packet<T>, player: Player, data: T) -> (),
-	fireAllClients: (packet: Packet<T>, data: T) -> (),
-	__type: bufferTypes.bufferType<T>,
-	__id: number,
-	__serverCallbacks: { ServerCallback<T> },
-	__clientCallbacks: { ClientCallback<T> },
+	serverConnect: (callback: ServerCallback<T>) -> (),
+	fire: (args: T) -> (),
+	fireAllClients: (args: T) -> (),
+	fireClient: (player: Player, args: T) -> (),
+	clientConnect: (callback: ClientCallback<T>) -> (),
 }
 
 export type Channel = {
-	add: (data: PacketData<any>) -> (),
+	process: () -> (),
+	add: (packetId: number, data: any) -> (),
 	kill: () -> (),
-	update: () -> (),
 }
 
-local networkingTypes = typespace.new("Networking", 1024)
-local namespace = networkingTypes.namespace()
-local writer = networkingTypes.writer
-local channels: { [number]: Channel } = {}
-local packetTypes: { bufferTypes.bufferType<any> } = {}
-local isClient = RunService:IsClient()
+local networkingSpace = typespace.new("ElLuckyon.Networking", 1024)
+local networkignNamespace = networkingSpace.namespace()
+local writer = networkingSpace.writer
 local writeu8 = writer.writeU8
-local writeu16At = writer.writeu16At
 local readu8 = buffer.readu8
-local cursor = writer.cursor
-local defaultChannel: Channel
+local packetEncoders: { bufferTypes.encodeFunc<any> } = {}
+local packetDecoders: { bufferTypes.decodeFunc<any> } = {}
+local env: "CLIENT" | "SERVER" = (RunService:IsClient() and "CLIENT") or "SERVER"
+local serverAwaitingChannels = {}
+local clientCallbacks: { [number]: { ClientCallback<any> } } = {}
+local serverCallbacks: { [number]: { ServerCallback<any> } } = {}
+local serverChannels: { Channel } = {}
+local clientChannel: Channel
 
----------------------------------------------
--- Packets
----------------------------------------------
+--------------------------------------
+--             Packets              --
+--------------------------------------
 
-local function serverConnect<T>(packet: Packet<T>, callback: ServerCallback<T>): ()
-	table.insert(packet.__serverCallbacks, callback)
+-- We use closures because they have less overhead than metatables or table indexing
+
+-- Methods blocked on server
+
+local function illegalClientConnect<T>(_callback: ClientCallback<T>): ()
+	error("You cannot use clientConnect on the server")
 end
 
-local function illegalServerConnect<T>(packet: Packet<T>, callback: ServerCallback<T>): ()
-	error("You cannot use ServerConnect from the client")
+local function illegalFire<T>(_args: T): ()
+	error("You cannot use fire from the server")
 end
 
-local function clientConnect<T>(packet: Packet<T>, callback: ClientCallback<T>): ()
-	table.insert(packet.__clientCallbacks, callback)
+-- Method blocked on client
+
+local function illegalServerConnect<T>(_callback: ServerCallback<T>): ()
+	error("You cannot use serverConnect from the client")
 end
 
-local function illegalClientConnect<T>(packet: Packet<T>, callback: ClientCallback<T>): ()
-	error("You cannot use ClientConnect from the server")
+local function illegalFireAllClients<T>(_args: T): ()
+	error("You cannot use fireAllClients on the server")
 end
 
-local function fire<T>(packet: Packet<T>, data: T): ()
-	defaultChannel.add({ id = packet.__id, args = data})
+local function illegalFireClient<T>(_args: T): ()
+	error("You cannot use fireClient on the server")
 end
 
-local function illegalFire<T>(_packet: Packet<T>, _data: T): ()
-	error("You cannot use Fire from the server")
-end
+local packetIdCounter = 0
 
-local function fireClient<T>(packet: Packet<T>, player: Player, data: T): ()
-	channels[player.UserId].add({ id = packet.__id, args = data })
-end
-
-local function illegalFireClient<T>(_packet: Packet<T>, _player: Player, _data: T): ()
-	error("You cannot use FireClient from the client")
-end
-
-local function fireAllClients<T>(packet: Packet<T>, data: T): ()
-	for _, channel in channels do
-		channel.add({ id = packet.__id, args = data})
-	end
-end
-
-local function illegalFireAllClients<T>(_packet: Packet<T>, _data: T): ()
-	error("You cannot use FireAllClients from the client")
-end
-
+-- Server packet constructor
 local function createServerPacket<T>(struct: T): Packet<T>
-	local id = #packetTypes + 1
-	local __type = namespace.getFromSample(networkingTypes.struct(struct))
-	local packet: Packet<T> = {
+	local callbacks: { ServerCallback<T> } = {}
+	local packetId = packetIdCounter
+
+	networkingSpace.struct(struct)
+	local packetType = networkignNamespace.getFromSample(struct)
+
+	local function serverConnect(callback: ServerCallback<T>): ()
+		table.insert(callbacks, callback)
+	end
+
+	local function fireAllClients(args: T): ()
+		for _, channel in serverChannels do
+			channel.add(packetId, args)
+		end
+	end
+
+	local function fireClient(player: Player, args: T): ()
+		serverChannels[player.UserId].add(packetId, args)
+	end
+
+	packetEncoders[packetId] = packetType.encode
+	packetDecoders[packetId] = packetType.decode
+	serverCallbacks[packetId] = callbacks
+
+	packetIdCounter += 1
+
+	return table.freeze({
 		serverConnect = serverConnect,
-		clientConnect = illegalClientConnect,
 		fire = illegalFire,
 		fireAllClients = fireAllClients,
 		fireClient = fireClient,
-		__type = __type,
-		__id = id,
-		__clientCallbacks = {},
-		__serverCallbacks = {},
-	}
-	packetTypes[id] = __type
-	return table.freeze(packet)
+		clientConnect = illegalClientConnect,
+	})
 end
 
+-- Client packet constructor
 local function createClientPacket<T>(struct: T): Packet<T>
-	local id = #packetTypes + 1
-	local __type = namespace.getFromSample(networkingTypes.struct(struct))
-	local packet: Packet<T> = {
+	local callbacks: { ClientCallback<T> } = {}
+	local packetId = packetIdCounter
+
+	networkingSpace.struct(struct)
+	local packetType = networkignNamespace.getFromSample(struct)
+
+	local function clientConnect(callback: ClientCallback<T>): ()
+		table.insert(callbacks, callback)
+	end
+
+	local function fire(args: T): ()
+		clientChannel.add(packetId, args)
+	end
+
+	packetEncoders[packetId] = packetType.encode
+	packetDecoders[packetId] = packetType.decode
+	clientCallbacks[packetId] = callbacks
+
+	packetIdCounter += 1
+
+	return table.freeze({
 		serverConnect = illegalServerConnect,
-		clientConnect = clientConnect,
 		fire = fire,
 		fireAllClients = illegalFireAllClients,
 		fireClient = illegalFireClient,
-		__type = __type,
-		__id = id,
-		__clientCallbacks = {},
-		__serverCallbacks = {},
-	}
-	packetTypes[id] = __type
-	return table.freeze(packet)
+		clientConnect = clientConnect,
+	})
 end
 
----------------------------------------------
--- Channels
----------------------------------------------
+----------------------------------------
+--             Channels               --
+----------------------------------------
 
-local function createChannel(player: Player): ()
-	local remoteEvent = (isClient and player:WaitForChild(CHANNEL_REMOTE_NAME) :: RemoteEvent) or Instance.new("RemoteEvent")
-	remoteEvent.Name = CHANNEL_REMOTE_NAME
-	remoteEvent.Parent = player
+-- We use seperate functions for server & client thought they are similar to reduce overhead from additonal function calls and table lookups.
 
-	local queue = newQueue()
-	local push = queue.pushBack
-	local pop = queue.popFront
-	local size = queue.size
-    local isEmpty = queue.isEmpty
+local function createServerChannel(player: Player)
+	local remote = Instance.new("RemoteEvent")
+	remote.Name = CHANNEL_REMOTE_NAME
+	remote.Parent = player
 
-	local update: () -> ()
+	local pendingPackets: { [number]: { any } } = {}
+	local numOfPendingPackets = 0
 
-
-	if isClient then
-		remoteEvent.OnClientEvent:Connect(function(buf: buffer): ()
-			local len = readu8(buf, 0)
-            local index = 1
-            for i = 1, len do
-                local packetId = readu8(buf, index)
-                index += 1
-                local packetType = packetTypes[packetId]
-                local val, valSize = packetType.decode(buf, index, 0)
-                index += valSize :: number
-            end
-		end)
-		update = function()
-            if isEmpty() then return end
-            local len = size()
-			writeu8(len)
-			for _ = 1, len do
-				local packetData = pop()
-                local packetId = packetData.id
-                writeu8(packetId)
-				local packetType = packetTypes[packetId]
-				packetType.encode(packetData.args)
+	--// We clear tables instead of dropping them because the overhead from clearing is < than over head from creating new table every time we add.
+	local function process(): ()
+		writeu8(numOfPendingPackets)
+		for packetId, collection in pendingPackets do
+			local collectionSize = #collection
+			if collectionSize < 1 then
+				continue
 			end
-			local buf = writer.pop()
-            remoteEvent:FireServer(buf)
-		end
-	else
-		remoteEvent.OnServerEvent:Connect(function(player: Player, buf: buffer): ()
-            local len = readu8(buf, 0)
-            local index = 1
-            for i = 1, len do
-                local packetId = readu8(buf, index)
-                index += 1
-                local packetType = packetTypes[packetId]
-                local val, valSize = packetType.decode(buf, index, 0)
-                print(  val.arr1)
-                index += valSize :: number
-            end
-		end)
-        update = function()
-            if isEmpty() then return end
-			local len = size()
-			writeu8(len)
-			for _ = 1, len do
-				local packetData = pop()
-                local packetId = packetData.id
-                writeu8(packetId)
-				local packetType = packetTypes[packetId]
-				packetType.encode(packetData.args)
+			local encode = packetEncoders[packetId]
+			writeu8(packetId)
+			writeu8(collectionSize)
+			for _, data in collection do
+				encode(data)
 			end
-			local buf = writer.pop()
-            remoteEvent:FireClient(player, buf)
+			table.clear(collection)
 		end
+		numOfPendingPackets = 0
+		local buf = writer.pop()
+		remote:FireClient(player, buf)
 	end
 
-	local function add(data: PacketData<any>): ()
-		push(data)
+	local function add<T>(packetId: number, data: T): ()
+		local packetCollection: { T } = pendingPackets[packetId]
+		if not packetCollection then
+			pendingPackets[packetId] = { data }
+            numOfPendingPackets += 1
+		else
+			table.insert(packetCollection, data)
+            if #packetCollection == 1 then
+                numOfPendingPackets += 1
+            end
+		end		
+		if numOfPendingPackets == 1 then
+			table.insert(serverAwaitingChannels, process)
+		end
 	end
 
 	local function kill(): ()
-		queue.clear()
-		remoteEvent:Destroy()
-		channels[player.UserId] = nil
+		serverChannels[player.UserId] = nil
+		remote:Destroy()
+		table.clear(pendingPackets)
 	end
 
-	local channel = table.freeze({
-		add = add,
-		kill = kill,
-		update = update,
-	})
+	-- Writing deocode in monolith function to minimize func call overheads and table lookups
+	remote.OnServerEvent:Connect(function(sender, buf: buffer)
+		if sender ~= player then
+			warn("Player attempted to communicate via other players channel, player=", sender)
+			return
+		end
+		local numOfUniquePackets = readu8(buf, 0)
+		local index = 1
+		for _ = 1, numOfUniquePackets do
+			local packetId = readu8(buf, index) 
+			index += 1
 
-	channels[player.UserId] = channel
+			local numOfSimilarPackets = readu8(buf, index)
+			index += 1
 
-	return channel
+			local decode = packetDecoders[packetId]
+			if not decode then
+				warn(
+					"Packet did not contain a valid decode method, Payload dropped, packetId & sender =",
+					packetId,
+					sender
+				)
+				return
+			end
+
+			local callbacks = serverCallbacks[packetId]
+
+			for _ = 1, numOfSimilarPackets do
+				local data, dataSize = decode(buf, index, 0)
+				if not dataSize then
+					warn("Packet did not return a valid size, Payload dropped, packetId & sender =", packetId, sender)
+					return
+				end
+                index += dataSize
+				for _, callback in callbacks do
+					callback(sender, data)
+				end
+			end
+		end
+	end)
+
+	serverChannels[player.UserId] = { kill = kill, process = process, add = add }
 end
 
-RunService.Heartbeat:Connect(function()
-	for _, channel in channels do
-		channel.update()
+local function createClientChannel(player: Player): Channel
+	local remote = player:WaitForChild(CHANNEL_REMOTE_NAME, CLIENT_AWAIT_CHANNEL_TIMEOUT) :: RemoteEvent
+	if not remote then
+		player:Kick("Could not establish connection with server.")
 	end
-end)
 
-if isClient then
-	defaultChannel = createChannel(PlayerService.LocalPlayer)
+	local pendingPackets: { [number]: { any } } = {}
+	local numOfPendingPackets = 0
+
+	local function add<T>(packetId: number, data: T): ()
+		local packetCollection: { T } = pendingPackets[packetId]
+		if not packetCollection then
+			pendingPackets[packetId] = { data }
+            numOfPendingPackets += 1
+		else
+			table.insert(packetCollection, data)
+            if #packetCollection == 1 then
+                numOfPendingPackets += 1
+            end
+		end
+	end
+
+	local function process(): ()
+        if numOfPendingPackets == 0 then return end
+		writeu8(numOfPendingPackets)
+		for packetId, collection in pendingPackets do
+			local collectionSize = #collection
+			if collectionSize < 1 then
+				continue
+			end
+			local encode = packetEncoders[packetId]
+			writeu8(packetId)
+			writeu8(collectionSize)
+			for _, data in collection do
+				encode(data)
+			end
+			table.clear(collection)
+		end
+		numOfPendingPackets = 0
+		local buf = writer.pop()
+		remote:FireServer(buf)
+	end
+
+	local function kill(): ()
+		serverChannels[player.UserId] = nil
+		remote:Destroy()
+		table.clear(pendingPackets)
+	end
+
+	-- Relaxed checks compared to server, cuz we can trust the server
+	remote.OnClientEvent:Connect(function(buf: buffer)
+		local numOfUniquePackets = readu8(buf, 0)
+		local index = 1
+		for _ = 1, numOfUniquePackets do
+			local packetId = readu8(buf, index)
+			index += 1
+
+			local numOfSimilarPackets = readu8(buf, index)
+			index += 1
+
+			local decode = packetDecoders[packetId]
+			local callbacks = clientCallbacks[packetId]
+
+			for _ = 1, numOfSimilarPackets do
+				local data, dataSize = decode(buf, index, 0)
+				if not dataSize then
+					warn("Packet did not return a valid size, Payload dropped, packetId =", packetId)
+					return
+				end
+                index += dataSize
+				for _, callback in callbacks do
+					callback(data)
+				end
+			end
+		end
+	end)
+
+	return { kill = kill, process = process, add = add }
+end
+
+local packetConstructor: <T>(struct: T) -> Packet<T>
+
+if env == "CLIENT" then
+	clientChannel = createClientChannel(PlayerService.LocalPlayer)
+	packetConstructor = createClientPacket
+    RunService.Heartbeat:Connect(function()
+        clientChannel.process()
+    end)
 else
-	PlayerService.PlayerAdded:Connect(createChannel)
-	PlayerService.PlayerRemoving:Connect(function(Player)
-		channels[Player.UserId].kill()
+	PlayerService.PlayerAdded:Connect(createServerChannel)
+	PlayerService.PlayerRemoving:Connect(function(player)
+		serverChannels[player.UserId].kill()
+	end)
+	packetConstructor = createServerPacket
+	RunService.Heartbeat:Connect(function()
+		for _, process in serverAwaitingChannels do
+			process()
+		end
+		table.clear(serverAwaitingChannels)
 	end)
 end
 
 return table.freeze({
-	packet = ((isClient and createClientPacket) or createServerPacket) :: <T>(struct: T) -> Packet<T>,
-	types = networkingTypes,
+	packet = packetConstructor,
+	types = networkingSpace,
 })
