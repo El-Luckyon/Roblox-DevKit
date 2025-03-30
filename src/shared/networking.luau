@@ -22,8 +22,7 @@ local RunService = game:GetService("RunService")
 local PlayerService = game:GetService("Players")
 
 local parentDir = script.Parent
-local typespace = require(parentDir.typespace)
-local bufferTypes = require(parentDir.bufferTypes)
+local bufferTypeRegistry = require(parentDir.bufferTypeRegistry)
 
 export type ClientCallback<T> = (T) -> ()
 export type ServerCallback<T> = (Player, T) -> ()
@@ -42,13 +41,12 @@ export type Channel = {
 	kill: () -> (),
 }
 
-local networkingSpace = typespace.new("ElLuckyon.Networking", 1024)
-local networkignNamespace = networkingSpace.namespace()
-local writer = networkingSpace.writer
+local networkingTypeRegistry = bufferTypeRegistry.new("ElLuckyon.Networking", 1024)
+local writer = networkingTypeRegistry.writer
 local writeu8 = writer.writeU8
 local readu8 = buffer.readu8
-local packetEncoders: { bufferTypes.encodeFunc<any> } = {}
-local packetDecoders: { bufferTypes.decodeFunc<any> } = {}
+local packetEncoders: { bufferTypeRegistry.encoder<any> } = {}
+local packetDecoders: { bufferTypeRegistry.decoder<any> } = {}
 local env: "CLIENT" | "SERVER" = (RunService:IsClient() and "CLIENT") or "SERVER"
 local serverAwaitingChannels = {}
 local clientCallbacks: { [number]: { ClientCallback<any> } } = {}
@@ -93,8 +91,8 @@ local function createServerPacket<T>(struct: T): Packet<T>
 	local callbacks: { ServerCallback<T> } = {}
 	local packetId = packetIdCounter
 
-	networkingSpace.struct(struct)
-	local packetType = networkignNamespace.getFromSample(struct)
+	networkingTypeRegistry.struct(struct)
+	local packetType = networkingTypeRegistry.getTypeFromSample(struct)
 
 	local function serverConnect(callback: ServerCallback<T>): ()
 		table.insert(callbacks, callback)
@@ -130,8 +128,8 @@ local function createClientPacket<T>(struct: T): Packet<T>
 	local callbacks: { ClientCallback<T> } = {}
 	local packetId = packetIdCounter
 
-	networkingSpace.struct(struct)
-	local packetType = networkignNamespace.getFromSample(struct)
+	networkingTypeRegistry.struct(struct)
+	local packetType = networkingTypeRegistry.getTypeFromSample(struct)
 
 	local function clientConnect(callback: ClientCallback<T>): ()
 		table.insert(callbacks, callback)
@@ -208,7 +206,7 @@ local function createServerChannel(player: Player)
 	end
 
 	local function kill(): ()
-		serverChannels[player.UserId] = nil
+        serverChannels[player.UserId] = nil
 		remote:Destroy()
 		table.clear(pendingPackets)
 	end
@@ -222,7 +220,7 @@ local function createServerChannel(player: Player)
 		local numOfUniquePackets = readu8(buf, 0)
 		local index = 1
 		for _ = 1, numOfUniquePackets do
-			local packetId = readu8(buf, index) 
+			local packetId = readu8(buf, index)
 			index += 1
 
 			local numOfSimilarPackets = readu8(buf, index)
@@ -301,7 +299,6 @@ local function createClientChannel(player: Player): Channel
 	end
 
 	local function kill(): ()
-		serverChannels[player.UserId] = nil
 		remote:Destroy()
 		table.clear(pendingPackets)
 	end
@@ -361,5 +358,5 @@ end
 
 return table.freeze({
 	packet = packetConstructor,
-	types = networkingSpace,
+	types = networkingTypeRegistry,
 })

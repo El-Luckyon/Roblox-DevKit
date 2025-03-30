@@ -5,7 +5,7 @@
 -- This script is the entry point for the server. It is responsible for setting up the server environment and starting the server scripts.
 
 local packets = require(game.ReplicatedStorage.SharedTests.packets)
-local remote = game.ReplicatedStorage.RemoteEvent
+local remote = game.ReplicatedStorage.re
 
 local EPSILON = 0.0001
 

@@ -2,7 +2,7 @@
 --!native
 --!optimize 2
 
--- bufferTypes.luau
+-- bufferTypeFactory.luau
 -- will handle creation of buffer types and namespaces. (data types that can be encoded into a buffer)
 
 ------------Dependencies-------------
@@ -12,7 +12,7 @@
 export type encodeFunc<T> = (val: T, size : number?) -> ()
 export type decodeFunc<T> = (buf: buffer, startIndex: number, size : number) -> (T, number?)
 
-export type namespace = {
+export type factory = {
 	new: <T>(id: string, val: T, encode: encodeFunc<T>, decode: decodeFunc<T>, size: number?) -> T,
 	getFromId: (id: string) -> bufferType<any>,
 	getFromSample: <T>(val: T) -> bufferType<T>,
@@ -27,8 +27,8 @@ export type bufferType<T> = {
 	hash: string,
 }
 
--- Namespace Constructor
-return function<T>(name : string) : namespace
+-- factory Constructor
+return function<T>(name : string) : factory
 
     local bufferTypesFromHash: { [string]: bufferType<any> } = {}
     local bufferTypesFromId: { [string]: bufferType<any> } = {}

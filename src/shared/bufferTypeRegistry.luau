@@ -2,16 +2,21 @@
 --!native
 --!optimize 2
 
--- typespace.luau
+-- bufferTypeRegistry.luau
 -- an extension to namespace from buffertypes. allows creation of same types with different writers.
 
 ------------Dependencies-------------
--- bufferTypes.luau                --
+-- bufferTypeFactory.luau          --
 -- bufferWriter.luau               --
 -------------------------------------
 
 local bufferWriter = require(script.Parent.bufferWriter)
-local bufferTypes  = require(script.Parent.bufferTypes)
+local bufferTypeFactory  = require(script.Parent.bufferTypeFactory)
+
+export type factory = bufferTypeFactory.factory
+export type bufferType<T> = bufferTypeFactory.bufferType<T>
+export type encoder<T> = bufferTypeFactory.encodeFunc<T>
+export type decoder<T> = bufferTypeFactory.decodeFunc<T>
 
 ----------------------------------
 -- Cached Read Methods (Global)
@@ -139,15 +144,15 @@ end
 ----------------------------------
 -- createTypespace (Write methods inside)
 ----------------------------------
-local typespaces = {}
+local bufferTypeRegistrys = {}
 
 local function createTypespace(name: string, writerSize: number)
-    if typespaces[name] then
-        error("Type-space with name already exists, name: " .. name)
+    if bufferTypeRegistrys[name] then
+        error("BufferTypeRegistry with name already exists, name: " .. name)
     end
 
     local writer = bufferWriter(writerSize)
-    local namespace = bufferTypes(name)
+    local factory = bufferTypeFactory(name)
 
     -- Cache writer functions for optimization
     local localWriteF32 = writer.writeF32
@@ -246,8 +251,8 @@ local function createTypespace(name: string, writerSize: number)
     local arrays = {}
 
     local function createArray<T>(sample : T) : {T}
-        local t = namespace.getFromSample(sample)
-        local tId = namespace.getIdFromSample(sample)
+        local t = factory.getFromSample(sample)
+        local tId = factory.getIdFromSample(sample)
         local aId = "A" .. tId
         local prevVal = arrays[aId]
         if prevVal then return prevVal end
@@ -297,15 +302,15 @@ local function createTypespace(name: string, writerSize: number)
             end
         end
         
-        local arrayType = namespace.new("aId" .. tId, { sample }, encodeArray, decodeArray)
+        local arrayType = factory.new("aId" .. tId, { sample }, encodeArray, decodeArray)
         arrays[aId] = arrayType
         return arrayType
     end
 
     local fixedArrays = {}
     local function createFixedArray<T>(sample : T, size : number) : {T}
-        local t = namespace.getFromSample(sample)
-        local tId = namespace.getIdFromSample(sample)
+        local t = factory.getFromSample(sample)
+        local tId = factory.getIdFromSample(sample)
         local aId = tId .. size
 
         local prevVal = fixedArrays[aId]
@@ -339,7 +344,7 @@ local function createTypespace(name: string, writerSize: number)
             return array
         end
 
-        local arrayType = namespace.new("aId" .. tId, { sample }, encodeArray, decodeArray, size)
+        local arrayType = factory.new("aId" .. tId, { sample }, encodeArray, decodeArray, size)
         fixedArrays[aId] = arrayType
         return arrayType
     end
@@ -353,7 +358,7 @@ local function createTypespace(name: string, writerSize: number)
         local size = #sample
         local val = staticStrings[size]
         if val then return val end
-        val = namespace.new(string.format("fs%d", size), sample, writer.writeFixedString, defaultReadString, size)
+        val = factory.new(string.format("fs%d", size), sample, writer.writeFixedString, defaultReadString, size)
         staticStrings[size] = val
         return val
     end
@@ -381,7 +386,7 @@ local function createTypespace(name: string, writerSize: number)
         local sizes = {}
 
         for i, key in keys do
-            local t = namespace.getFromSample(sample[key])
+            local t = factory.getFromSample(sample[key])
             encoders[i] = t.encode
             decoders[i] = t.decode
             sizes[i] = t.size
@@ -421,49 +426,54 @@ local function createTypespace(name: string, writerSize: number)
         end
 
         structId += 1
-        return namespace.new("St"..tostring(structId), sample, encode, decode)
+        return factory.new("St"..tostring(structId), sample, encode, decode)
     end
 
     ----------------------------------
     -- Assemble Typespace Table
     ----------------------------------
-    local typespace = table.freeze({
-        bool    = namespace.new("b", false, writer.writeBool, readBool, 1),
-        u8      = namespace.new("u8", 8, writer.writeU8, buffer.readu8, 1),
-        u16     = namespace.new("u16", 16, writer.writeU16, buffer.readu16, 2),
-        u32     = namespace.new("u32", 32, writer.writeU32, buffer.readu32, 4),
-        i8      = namespace.new("i8", 7, writer.writeI8, buffer.readi8, 1),
-        i16     = namespace.new("i16", 15, writer.writeI16, buffer.readi16, 2),
-        i32     = namespace.new("i32", 31, writer.writeI32, buffer.readi32, 4),
-        f32     = namespace.new("f32", 33, writer.writeF32, buffer.readf32, 4),
-        f64     = namespace.new("f64", 64, writer.writeF64, buffer.readf64, 8),
-        vec3    = namespace.new("v3", Vector3.new(), writeVec3F32, readVec3F32, 12),
-        f32vec3 = namespace.new("f32v3", Vector3.new(1), writeVec3F32, readVec3F32, 12),
-        f64vec3 = namespace.new("f64v3", Vector3.new(2), writeVec3F64, readVec3F64, 24),
-        int16vec3 = namespace.new("i16v3", Vector3.new(3), writeVec3I16, readVec3I16, 6),
-        int8vec3  = namespace.new("i8v3", Vector3.new(4), writeVec3I8, readVec3I8, 3),
-        int32vec3 = namespace.new("i32v3", Vector3.new(5), writeVec3I32, readVec3I32, 12),
-        uint8vec3 = namespace.new("u8v3", Vector3.new(6), writeVec3U8, readVec3U8, 3),
-        uint16vec3 = namespace.new("u16v3", Vector3.new(7), writeVec3U16, readVec3U16, 6),
-        uint32vec3 = namespace.new("u32v3", Vector3.new(8), writeVec3U32, readVec3U32, 12),
-        f32cframe  = namespace.new("cf", CFrame.new(), writeCFrameF32, readCFrameF32, 48),
-        f32color3  = namespace.new("c3", Color3.new(), writeColor3F32, readColor3F32, 12),
-        f32udim2 = namespace.new("f32udim2", UDim2.new(), writeUDim2Variant, readUDim2Variant, 12),
-        string  = namespace.new("s", "", writer.writeString, readHeaderString),
+    local bufferTypeRegistry = table.freeze({
+        bool    = factory.new("b", false, writer.writeBool, readBool, 1),
+        u8      = factory.new("u8", 8, writer.writeU8, buffer.readu8, 1),
+        u16     = factory.new("u16", 16, writer.writeU16, buffer.readu16, 2),
+        u32     = factory.new("u32", 32, writer.writeU32, buffer.readu32, 4),
+        i8      = factory.new("i8", 7, writer.writeI8, buffer.readi8, 1),
+        i16     = factory.new("i16", 15, writer.writeI16, buffer.readi16, 2),
+        i32     = factory.new("i32", 31, writer.writeI32, buffer.readi32, 4),
+        f32     = factory.new("f32", 33, writer.writeF32, buffer.readf32, 4),
+        f64     = factory.new("f64", 64, writer.writeF64, buffer.readf64, 8),
+        vec3    = factory.new("v3", Vector3.new(), writeVec3F32, readVec3F32, 12),
+        f32vec3 = factory.new("f32v3", Vector3.new(1), writeVec3F32, readVec3F32, 12),
+        f64vec3 = factory.new("f64v3", Vector3.new(2), writeVec3F64, readVec3F64, 24),
+        int16vec3 = factory.new("i16v3", Vector3.new(3), writeVec3I16, readVec3I16, 6),
+        int8vec3  = factory.new("i8v3", Vector3.new(4), writeVec3I8, readVec3I8, 3),
+        int32vec3 = factory.new("i32v3", Vector3.new(5), writeVec3I32, readVec3I32, 12),
+        uint8vec3 = factory.new("u8v3", Vector3.new(6), writeVec3U8, readVec3U8, 3),
+        uint16vec3 = factory.new("u16v3", Vector3.new(7), writeVec3U16, readVec3U16, 6),
+        uint32vec3 = factory.new("u32v3", Vector3.new(8), writeVec3U32, readVec3U32, 12),
+        f32cframe  = factory.new("cf", CFrame.new(), writeCFrameF32, readCFrameF32, 48),
+        f32color3  = factory.new("c3", Color3.new(), writeColor3F32, readColor3F32, 12),
+        f32udim2 = factory.new("f32udim2", UDim2.new(), writeUDim2Variant, readUDim2Variant, 12),
+        string  = factory.new("s", "", writer.writeString, readHeaderString),
+
         array   = createArray,
         fixedArray = createFixedArray,  
         fixedString = createFixedString,
         struct = createStruct,
-        namespace = function() return namespace end,
+
+        getTypeFromId = factory.getFromId,
+        getTypeFromSample = factory.getFromSample,
+        getIdFromSample = factory.getFromSample,
+
         writer = writer,
     })
     
-    typespaces[name] = typespace
-    return typespace
+    bufferTypeRegistrys[name] = bufferTypeRegistry
+    return bufferTypeRegistry
 end
 
 local function getTypespace(name: string)
-    return typespaces[name]
+    return bufferTypeFactory(name)[name]
 end
 
 return table.freeze({
