@@ -87,12 +87,15 @@ end
 local packetIdCounter = 0
 
 -- Server packet constructor
-local function createServerPacket<T>(struct: T): Packet<T>
+local function createServerPacket<T>(sample: T): Packet<T>
 	local callbacks: { ServerCallback<T> } = {}
 	local packetId = packetIdCounter
 
-	networkingTypeRegistry.struct(struct)
-	local packetType = networkingTypeRegistry.getTypeFromSample(struct)
+	if typeof(sample) == "table" then
+		networkingTypeRegistry.struct(sample)
+	end
+
+	local packetType = networkingTypeRegistry.getTypeFromSample(sample)
 
 	local function serverConnect(callback: ServerCallback<T>): ()
 		table.insert(callbacks, callback)
@@ -124,12 +127,15 @@ local function createServerPacket<T>(struct: T): Packet<T>
 end
 
 -- Client packet constructor
-local function createClientPacket<T>(struct: T): Packet<T>
+local function createClientPacket<T>(sample: T): Packet<T>
 	local callbacks: { ClientCallback<T> } = {}
 	local packetId = packetIdCounter
 
-	networkingTypeRegistry.struct(struct)
-	local packetType = networkingTypeRegistry.getTypeFromSample(struct)
+	if typeof(sample) == "table" then
+		networkingTypeRegistry.struct(sample)
+	end
+
+	local packetType = networkingTypeRegistry.getTypeFromSample(sample)
 
 	local function clientConnect(callback: ClientCallback<T>): ()
 		table.insert(callbacks, callback)
@@ -181,7 +187,7 @@ local function createServerChannel(player: Player)
 			writeu8(collectionSize)
 			for _, data in collection do
 				encode(data)
-			end
+			end	
 			table.clear(collection)
 		end
 		numOfPendingPackets = 0

@@ -101,23 +101,6 @@ local function readVec3U32(buf: buffer, startIndex: number): Vector3
 	return Vector3.new(x, y, z)
 end
 
--- cframe variants
-local function readCFrameF32(buf: buffer, startIndex: number): CFrame
-	local x = readf32(buf, startIndex)
-	local y = readf32(buf, startIndex + 4)
-	local z = readf32(buf, startIndex + 8)
-	local r00 = readf32(buf, startIndex + 12)
-	local r01 = readf32(buf, startIndex + 16)
-	local r02 = readf32(buf, startIndex + 20)
-	local r10 = readf32(buf, startIndex + 24)
-	local r11 = readf32(buf, startIndex + 28)
-	local r12 = readf32(buf, startIndex + 32)
-	local r20 = readf32(buf, startIndex + 36)
-	local r21 = readf32(buf, startIndex + 40)
-	local r22 = readf32(buf, startIndex + 44)
-	return CFrame.new(x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
-end
-
 -- color3 variants
 local function readColor3F32(buf: buffer, startIndex: number): Color3
 	local r = readf32(buf, startIndex)
@@ -139,6 +122,20 @@ end
 local function readHeaderString(buf: buffer, startIndex: number): (string, number)
     local size = readStringHeader(buf, startIndex)
     return defaultReadString(buf, startIndex + stringHeaderSize, size), size + stringHeaderSize
+end
+
+local function readCFrame(buf: buffer, offset: number): (CFrame, number)
+	local x = readf32(buf, offset)
+	local y = readf32(buf, offset + 4)
+	local z = readf32(buf, offset + 8)
+	local rx = readf32(buf, offset + 12)
+	local ry = readf32(buf, offset + 16)
+	local rz = readf32(buf, offset + 20)
+
+	local axis = Vector3.new(rx, ry, rz)
+	local angle = axis.Magnitude
+
+	return CFrame.fromAxisAngle(axis, angle) + Vector3.new(x, y, z), 24
 end
 
 ----------------------------------
@@ -213,21 +210,19 @@ local function createTypespace(name: string, writerSize: number)
         localWriteU32(val.Z)
     end
 
-    -- Write methods for cframe variants (only float variants kept)
-    local function writeCFrameF32(val: CFrame): ()
-        local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = val:GetComponents()
-        localWriteF32(x)
-        localWriteF32(y)
-        localWriteF32(z)
-        localWriteF32(r00)
-        localWriteF32(r01)
-        localWriteF32(r02)
-        localWriteF32(r10)
-        localWriteF32(r11)
-        localWriteF32(r12)
-        localWriteF32(r20)
-        localWriteF32(r21)
-        localWriteF32(r22)
+    local function writeCFrame(cframe: CFrame)
+		local x, y, z = cframe.X, cframe.Y, cframe.Z
+
+		local axis, angle = cframe:ToAxisAngle()
+		local rx, ry, rz = axis.X, axis.Y, axis.Z
+		axis = axis * angle
+
+		localWriteF32(x)
+		localWriteF32(y)
+		localWriteF32(z)
+		localWriteF32(rx)
+		localWriteF32(ry)
+		localWriteF32(rz)
     end
 
     -- Write methods for color3 variants (only float variants kept)
@@ -451,7 +446,7 @@ local function createTypespace(name: string, writerSize: number)
         uint8vec3 = factory.new("u8v3", Vector3.new(6), writeVec3U8, readVec3U8, 3),
         uint16vec3 = factory.new("u16v3", Vector3.new(7), writeVec3U16, readVec3U16, 6),
         uint32vec3 = factory.new("u32v3", Vector3.new(8), writeVec3U32, readVec3U32, 12),
-        f32cframe  = factory.new("cf", CFrame.new(), writeCFrameF32, readCFrameF32, 48),
+        cframe = factory.new("cf28", CFrame.new(28, 28, 28), writeCFrame, readCFrame),
         f32color3  = factory.new("c3", Color3.new(), writeColor3F32, readColor3F32, 12),
         f32udim2 = factory.new("f32udim2", UDim2.new(), writeUDim2Variant, readUDim2Variant, 12),
         string  = factory.new("s", "", writer.writeString, readHeaderString),

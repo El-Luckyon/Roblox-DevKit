@@ -55,7 +55,7 @@ local function update() : ()
 			job.executeTime = clock() + interval
 			push(job)
 		end
-        if  clock() - startTime > MAX_PROCESSING_TIME then
+        if clock() - startTime > MAX_PROCESSING_TIME then
             return
         end
 	end
